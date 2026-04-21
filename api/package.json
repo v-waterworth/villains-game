@@ -1,0 +1,15 @@
+{
+  "name": "villains-game-api",
+  "version": "1.0.0",
+  "description": "Azure Functions API for The Villains Among Us game",
+  "main": "index.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "echo \"No tests\""
+  },
+  "dependencies": {
+    "@azure/data-tables": "^13.2.2"
+  }
+}

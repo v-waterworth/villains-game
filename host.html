@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Villains Among Us — Host Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;900&family=Crimson+Pro:ital,wght@0,400;0,600;1,400;1,600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="game.css">
+</head>
+<body>
+<div id="app" class="app"></div>
+<div id="status" class="status-pill"><div class="status-dot"></div><span>Connecting</span></div>
+
+<script type="module">
+import { SESSION_ID, POLL_INTERVAL_HOST } from './config.js';
+import { VILLAINS, ROUNDS, matchupKey, villainCardHtml, scoreboardHtml, computeTotals, countVotes } from './game-core.js';
+
+// ─── Local state (mirrors API responses) ──────────────────────────────────
+let gameState = { phase: 'intro', roundIdx: 0, matchupIdx: 0 };
+let allVotes = {};
+let finalVotes = {};
+let voters = {};
+
+// ─── Voter URL (for QR + share) ───────────────────────────────────────────
+const voterUrl = window.location.origin +
+  window.location.pathname.replace(/host\.html$/, '') +
+  (SESSION_ID !== 'team-social' ? `?s=${SESSION_ID}` : '');
+
+// ─── API helpers ──────────────────────────────────────────────────────────
+async function fetchSession() {
+  const res = await fetch(`/api/session?s=${encodeURIComponent(SESSION_ID)}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+async function sendAction(body) {
+  const res = await fetch('/api/action', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...body, s: SESSION_ID }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+// ─── Poll loop ────────────────────────────────────────────────────────────
+async function poll() {
+  try {
+    const data = await fetchSession();
+    gameState = data.state || { phase: 'intro', roundIdx: 0, matchupIdx: 0 };
+    allVotes = data.votes || {};
+    finalVotes = data.final || {};
+    voters = data.voters || {};
+    setStatus('connected');
+    render();
+  } catch (err) {
+    console.error('Poll failed:', err);
+    setStatus('error');
+  }
+}
+
+// ─── Host actions ─────────────────────────────────────────────────────────
+async function setState(newState) {
+  gameState = newState; // optimistic
+  render();
+  try {
+    await sendAction({ action: 'setState', state: newState });
+  } catch (err) {
+    console.error(err);
+    alert('Action failed. Check your connection.');
+  }
+}
+
+window.startGame = () => setState({ phase: 'round', roundIdx: 0, matchupIdx: 0 });
+
+window.lockIn = () => {
+  const round = ROUNDS[gameState.roundIdx];
+  if (gameState.matchupIdx + 1 < round.matchups.length) {
+    setState({ ...gameState, matchupIdx: gameState.matchupIdx + 1 });
+  } else {
+    setState({ ...gameState, phase: 'roundEnd' });
+  }
+};
+
+window.nextRound = () => {
+  if (gameState.roundIdx + 1 < ROUNDS.length) {
+    setState({ phase: 'round', roundIdx: gameState.roundIdx + 1, matchupIdx: 0 });
+  } else {
+    setState({ ...gameState, phase: 'final' });
+  }
+};
+
+window.crownWinner = () => setState({ ...gameState, phase: 'results' });
+
+window.resetGame = async () => {
+  if (!confirm('Reset everything? All votes will be cleared.')) return;
+  try {
+    await sendAction({ action: 'reset' });
+    gameState = { phase: 'intro', roundIdx: 0, matchupIdx: 0 };
+    allVotes = {};
+    finalVotes = {};
+    render();
+  } catch (err) {
+    console.error(err);
+    alert('Reset failed.');
+  }
+};
+
+window.copyVoterUrl = async () => {
+  try {
+    await navigator.clipboard.writeText(voterUrl);
+    const el = document.querySelector('.share-url');
+    if (el) {
+      const orig = el.textContent;
+      el.textContent = 'Copied!';
+      setTimeout(() => el.textContent = orig, 1500);
+    }
+  } catch {
+    alert('URL: ' + voterUrl);
+  }
+};
+
+// ─── Status indicator ─────────────────────────────────────────────────────
+function setStatus(state) {
+  const pill = document.getElementById('status');
+  pill.className = 'status-pill ' + state;
+  pill.querySelector('span').textContent =
+    state === 'connected' ? 'Live' : state === 'error' ? 'Error' : 'Connecting';
+}
+
+// ─── Render ───────────────────────────────────────────────────────────────
+function render() {
+  const app = document.getElementById('app');
+  let html = '';
+  switch (gameState.phase) {
+    case 'intro':    html = renderIntro(); break;
+    case 'round':    html = renderMatchup(); break;
+    case 'roundEnd': html = renderRoundEnd(); break;
+    case 'final':    html = renderFinal(); break;
+    case 'results':  html = renderResults(); break;
+    default:         html = renderIntro();
+  }
+  if (gameState.phase !== 'intro') {
+    html += `<button class="reset-btn" onclick="resetGame()">⟲ reset game</button>`;
+  }
+  app.innerHTML = html;
+}
+
+function renderIntro() {
+  const galleryHtml = Object.keys(VILLAINS).map(id => villainCardHtml(id, { size: 'md' })).join('');
+  const voterCount = Object.keys(voters).length;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=8&data=${encodeURIComponent(voterUrl)}`;
+
+  return `
+    <div class="screen">
+      <div class="text-center max-w-4xl">
+        <div class="intro-eyebrow">Host Console</div>
+        <h1 class="intro-title">THE VILLAINS</h1>
+        <div class="intro-subtitle">Among Us</div>
+        <p class="intro-blurb">
+          Seven icons of fictional evil dropped into ordinary life.
+          Share the URL below with your team so they can vote from their phones.
+        </p>
+
+        <div class="share-panel">
+          <div class="share-qr"><img src="${qrUrl}" alt="Scan to join" width="200" height="200"/></div>
+          <div class="share-info">
+            <div>
+              <div class="share-label">Voter URL</div>
+              <div class="share-url" onclick="copyVoterUrl()" style="cursor: pointer;" title="Click to copy">${voterUrl}</div>
+            </div>
+            <div class="share-count">
+              <strong>${voterCount}</strong> ${voterCount === 1 ? 'voter' : 'voters'} connected
+            </div>
+          </div>
+        </div>
+
+        <div class="villain-gallery">${galleryHtml}</div>
+
+        <div class="rules-box">
+          <div class="rules-title">How it Plays — 30 minutes</div>
+          <div class="rules-list">
+            <div class="rules-item"><span class="rules-num">I</span><span>Cold, Hard Logic — whose worldview holds up?</span></div>
+            <div class="rules-item"><span class="rules-num">II</span><span>Everyday Menace — ordinary life, extraordinary awfulness</span></div>
+            <div class="rules-item"><span class="rules-num">III</span><span>Office Hellscape — villains in business casual</span></div>
+            <div class="rules-item"><span class="rules-num">IV</span><span>Matters of the Heart — feelings, apparently</span></div>
+            <div class="rules-item"><span class="rules-num">★</span><span>Final Verdict — crown the Ultimate Villain</span></div>
+          </div>
+          <div class="rules-footer">
+            Votes update live. Click "Lock In Result" to advance through the matchups.
+          </div>
+        </div>
+
+        <button class="btn" onclick="startGame()">Begin the Games</button>
+      </div>
+    </div>`;
+}
+
+function renderMatchup() {
+  const round = ROUNDS[gameState.roundIdx];
+  if (!round) return renderIntro();
+  const matchup = round.matchups[gameState.matchupIdx];
+  if (!matchup) return renderIntro();
+
+  const key = matchupKey(gameState.roundIdx, gameState.matchupIdx);
+  const matchupCounts = countVotes(allVotes[key]);
+  const matchupTotal = (matchupCounts[matchup.a] || 0) + (matchupCounts[matchup.b] || 0);
+  const voterCount = Object.keys(voters).length;
+  const runningTotals = computeTotals(allVotes);
+
+  const dotsHtml = round.matchups.map((_, i) => {
+    const cls = i < gameState.matchupIdx ? 'done' : i === gameState.matchupIdx ? 'current' : '';
+    return `<div class="round-dot ${cls}"></div>`;
+  }).join('');
+
+  return `
+    <div class="screen stage">
+      <div class="stage-frame">
+        <div class="stage-label"><span>${round.title} — ${round.name}</span></div>
+        <div class="round-progress">${dotsHtml}</div>
+        <h2 class="matchup-question">${matchup.q}</h2>
+        <div class="matchup-hint">Live — votes update as the team decides.</div>
+
+        <div class="matchup-grid">
+          ${villainCardHtml(matchup.a, { size: 'lg', voteCount: matchupCounts[matchup.a] || 0 })}
+          <div class="vs-ornament"><div class="vs-text">VS</div></div>
+          ${villainCardHtml(matchup.b, { size: 'lg', voteCount: matchupCounts[matchup.b] || 0 })}
+        </div>
+
+        <div class="matchup-controls">
+          <div class="vote-count-label">
+            ${matchupTotal} of ${voterCount} ${voterCount === 1 ? 'voter' : 'voters'} cast
+          </div>
+          <button class="btn btn-gold" onclick="lockIn()">
+            ${gameState.matchupIdx + 1 < round.matchups.length ? 'Lock In → Next Matchup' : 'Lock In → End Round'}
+          </button>
+        </div>
+
+        ${scoreboardHtml(runningTotals)}
+      </div>
+    </div>`;
+}
+
+function renderRoundEnd() {
+  const round = ROUNDS[gameState.roundIdx];
+  const isLast = gameState.roundIdx + 1 >= ROUNDS.length;
+  const runningTotals = computeTotals(allVotes);
+  return `
+    <div class="screen">
+      <div class="text-center max-w-4xl" style="width: 100%;">
+        <div class="round-end-eyebrow">${round.title} Complete</div>
+        <h2 class="round-end-title">${round.name}</h2>
+        <div class="max-w-xl mb-10">${scoreboardHtml(runningTotals)}</div>
+        <button class="btn" onclick="nextRound()">
+          ${isLast ? 'Proceed to Final Verdict →' : 'Begin Next Round →'}
+        </button>
+      </div>
+    </div>`;
+}
+
+function renderFinal() {
+  const counts = countVotes(finalVotes);
+  const total = Object.values(finalVotes).length;
+  const voterCount = Object.keys(voters).length;
+  const cardsHtml = Object.keys(VILLAINS).map(id =>
+    villainCardHtml(id, { size: 'md', voteCount: counts[id] || 0 })
+  ).join('');
+
+  return `
+    <div class="screen stage">
+      <div class="stage-frame">
+        <div class="stage-label"><span>The Final Verdict</span></div>
+        <h2 class="final-title">Who is the Ultimate Villain?</h2>
+        <p class="final-subtitle">
+          The team is casting their final votes. Results update live.
+        </p>
+        <div class="villain-gallery">${cardsHtml}</div>
+        <div class="matchup-controls">
+          <div class="vote-count-label">
+            ${total} of ${voterCount} final ${voterCount === 1 ? 'vote' : 'votes'} cast
+          </div>
+          <button class="btn btn-final" ${total === 0 ? 'disabled' : ''} onclick="crownWinner()">
+            Crown the Villain →
+          </button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderResults() {
+  const finalCounts = countVotes(finalVotes);
+  const sortedFinal = Object.entries(finalCounts).sort((a, b) => b[1] - a[1]);
+  const winnerId = sortedFinal[0]?.[0] || Object.keys(VILLAINS)[0];
+  const winner = VILLAINS[winnerId];
+
+  const runningTotals = computeTotals(allVotes);
+  const combined = { ...runningTotals };
+  Object.entries(finalCounts).forEach(([id, cnt]) => {
+    combined[id] = (combined[id] || 0) + cnt * 3;
+  });
+
+  return `
+    <div class="screen">
+      <div class="text-center max-w-4xl" style="width: 100%;">
+        <div class="round-end-eyebrow">Hereby crowned</div>
+        <div class="crown">♛</div>
+        <h2 class="ultimate-name" style="color: ${winner.accent}; text-shadow: 0 4px 30px ${winner.accent}60;">${winner.name}</h2>
+        <div class="ultimate-tagline">"${winner.tagline}"</div>
+        <div class="ultimate-label">The Ultimate Villain</div>
+        <div class="max-w-lg mb-8">${villainCardHtml(winnerId, { size: 'lg' })}</div>
+        <div class="max-w-xl mb-10">
+          <div style="font-family: 'Cinzel', serif; text-transform: uppercase; letter-spacing: 0.3em; font-size: 0.75rem; color: rgba(255, 236, 179, 0.6); margin-bottom: 1rem;">
+            Final Leaderboard (rounds + 3× final vote)
+          </div>
+          ${scoreboardHtml(combined)}
+        </div>
+        <button class="btn btn-ghost" onclick="resetGame()">↺ Play Again</button>
+      </div>
+    </div>`;
+}
+
+// ─── Kick off ─────────────────────────────────────────────────────────────
+poll();
+setInterval(poll, POLL_INTERVAL_HOST);
+</script>
+</body>
+</html>
