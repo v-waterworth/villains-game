@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Villains Among Us — A Team Social Parlor Game</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;900&family=Crimson+Pro:ital,wght@0,400;0,600;1,400;1,600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-deep: #0a0506;
+    --cream: #f5ecd9;
+    --gold: #c9a961;
+    --gold-dim: rgba(201, 169, 97, 0.6);
+    --gold-faint: rgba(201, 169, 97, 0.2);
+    --blood: #8b0000;
+    --blood-deep: #4a0008;
+    --red-bright: #c41e3a;
+    --stone-200: #e7e5e4;
+    --stone-300: #d6d3d1;
+    --stone-400: #a8a29e;
+    --stone-500: #78716c;
+    --stone-700: #44403c;
+    --stone-800: #292524;
+    --stone-900: #1c1917;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    min-height: 100vh;
+    font-family: 'Crimson Pro', Georgia, serif;
+    color: var(--stone-200);
+    background: var(--bg-deep);
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -2;
+    background: radial-gradient(ellipse at 50% 0%, #2a0a12 0%, #0a0506 45%, #000 100%);
+  }
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.06) 0, rgba(255,255,255,0.06) 1px, transparent 1px, transparent 8px);
+    opacity: 0.5;
+  }
+
+  /* Typography helpers */
+  .font-display { font-family: 'Cinzel', 'Times New Roman', serif; letter-spacing: 0.04em; }
+  .font-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  .italic { font-style: italic; }
+
+  /* Layout */
+  .app { min-height: 100vh; width: 100%; position: relative; }
+  .screen {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1rem;
+  }
+  .screen.stage { justify-content: flex-start; padding-top: 3rem; }
+  .stage-frame { width: 100%; max-width: 64rem; margin: 0 auto; }
+
+  /* Stage label */
+  .stage-label {
+    text-align: center;
+    margin-bottom: 1.5rem;
+  }
+  .stage-label span {
+    display: inline-block;
+    padding: 0.25rem 1.5rem;
+    font-family: 'Cinzel', serif;
+    text-transform: uppercase;
+    letter-spacing: 0.4em;
+    font-size: 0.75rem;
+    color: rgba(255, 236, 179, 0.7);
+    border-top: 1px solid rgba(255, 236, 179, 0.3);
+    border-bottom: 1px solid rgba(255, 236, 179, 0.3);
+  }
+
+  /* Intro */
+  .intro-eyebrow {
+    font-family: 'Cinzel', serif;
+    text-transform: uppercase;
+    letter-spacing: 0.5em;
+    font-size: 0.75rem;
+    color: rgba(255, 236, 179, 0.6);
+    margin-bottom: 1.5rem;
+  }
+  .intro-title {
+    font-family: 'Cinzel', serif;
+    font-weight: 900;
+    font-size: clamp(2.5rem, 8vw, 6rem);
+    line-height: 0.95;
+    margin-bottom: 0.75rem;
+    color: var(--gold);
+    text-shadow: 0 4px 20px rgba(201, 169, 97, 0.25), 0 0 60px rgba(196, 30, 58, 0.12);
+  }
+  .intro-subtitle {
+    font-family: 'Cinzel', serif;
+    text-transform: uppercase;
+    letter-spacing: 0.3em;
+    font-size: 1rem;
+    color: var(--stone-400);
+    margin-bottom: 1rem;
+  }
+  .intro-blurb {
+    font-style: italic;
+    font-size: 1.125rem;
+    color: var(--stone-300);
+    max-width: 38rem;
+    margin: 0 auto 2.5rem;
+    line-height: 1.6;
+  }
+
+  /* Villain gallery grid */
+  .villain-gallery {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-width: 64rem;
+    margin: 0 auto 2.5rem;
+  }
+  @media (min-width: 640px) { .villain-gallery { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  @media (min-width: 1024px) { .villain-gallery { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1rem; } }
+
+  /* How it plays */
+  .rules-box {
+    max-width: 36rem;
+    margin: 0 auto 2.5rem;
+    text-align: left;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(255, 236, 179, 0.2);
+    padding: 1.5rem;
+  }
+  .rules-title {
+    font-family: 'Cinzel', serif;
+    text-transform: uppercase;
+    letter-spacing: 0.3em;
+    font-size: 0.75rem;
+    color: rgba(255, 236, 179, 0.7);
+    margin-bottom: 1rem;
+    text-align: center;
+  }
+  .rules-list { display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.95rem; color: var(--stone-300); }
+  .rules-item { display: flex; gap: 0.75rem; }
+  .rules-num { font-family: 'JetBrains Mono', monospace; color: rgba(255, 236, 179, 0.6); min-width: 1.5rem; }
+  .rules-footer {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--stone-800);
+    font-size: 0.8rem;
+    color: var(--stone-500);
+    font-style: italic;
+    text-align: center;
+  }
+
+  /* Buttons */
+  .btn {
+    display: inline-block;
+    padding: 1rem 3rem;
+    font-family: 'Cinzel', serif;
+    text-transform: uppercase;
+    letter-spacing: 0.3em;
+    font-size: 0.875rem;
+    cursor: pointer;
+    background: linear-gradient(180deg, var(--blood) 0%, var(--blood-deep) 100%);
+    color: var(--cream);
+    border: 1px solid var(--gold);
+    box-shadow: 0 8px 40px -10px rgba(196, 30, 58, 0.5);
+    position: relative;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .btn::before {
+    content: '';
+    position: absolute;
+    inset: 4px;
+    border: 1px solid rgba(255, 236, 179, 0.3);
+    pointer-events: none;
+  }
+  .btn:hover { transform: translateY(-2px); box-shadow: 0 12px 50px -10px rgba(196, 30, 58, 0.7); }
+  .btn:active { transform: translateY(0); }
+
+  .btn-gold {
+    background: linear-gradient(180deg, var(--gold) 0%, #8b7328 100%);
+    color: var(--bg-deep);
+    padding: 0.75rem 2.5rem;
+    box-shadow: 0 6px 24px -8px rgba(201, 169, 97, 0.6);
+  }
+  .btn-gold:hover { box-shadow: 0 10px 30px -8px rgba(201, 169, 97, 0.8); }
+  .btn-gold:disabled {
+    background: var(--stone-900);
+    color: var(--stone-700);
+    border-color: var(--stone-800);
+    box-shadow: none;
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+  .btn-gold:disabled:hover { transform: none; }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--gold);
+    border: 1px solid var(--gold);
+    padding: 0.75rem 2.5rem;
+    font-size: 0.75rem;
+    box-shadow: none;
+  }
+  .btn-ghost::before { display: none; }
+
+  .btn-final {
+    background: linear-gradient(180deg, var(--red-bright) 0%, #6a0a1a 100%);
+    padding: 1rem 3rem;
+  }
+
+  .reset-btn {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 10;
+    background: none;
+    border: none;
+    font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    font-size: 0.7rem;
+    color: var(--stone-500);
+    cursor: pointer;
+    padding: 0.5rem 0.75rem;
+  }
+  .reset-btn:hover { color: var(--stone-300); }
+
+  /* Villain Card */
+  .villain-card {
+    position: relative;
+    padding: 1rem;
+    transition: transform 0.3s, box-shadow 0.3s;
+    box-shadow: inset 0 0 40px rgba(0,0,0,0.5);
+  }
+  .villain-card.dim { opacity: 0.4; }
+  .villain-card.clickable { cursor: pointer; }
+  .villain-card.clickable:hover { transform: translateY(-4px); }
+  .villain-card.size-lg { padding: 1.5rem; }
+  @media (min-width: 768px) { .villain-card.size-lg { padding: 2rem; } }
+
+  .villain-corner {
+    position: absolute;
+    width: 1rem;
+    height: 1rem;
+  }
+  .villain-corner.tl { top: 0.5rem; left: 0.5rem; border-left: 1px solid; border-top: 1px solid; }
+  .villain-corner.tr { top: 0.5rem; right: 0.5rem; border-right: 1px solid; border-top: 1px solid; }
+  .villain-corner.bl { bottom: 0.5rem; left: 0.5rem; border-left: 1px solid; border-bottom: 1px solid; }
+  .villain-corner.br { bottom: 0.5rem; right: 0.5rem; border-right: 1px solid; border-bottom: 1px solid; }
+
+  .villain-inner { display: flex; flex-direction: column; align-items: center; text-align: center; }
+  .villain-icon-wrap { margin-bottom: 0.75rem; }
+  .villain-name {
+    font-family: 'Cinzel', serif;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    margin-bottom: 0.25rem;
+  }
+  .villain-card.size-lg .villain-name { font-size: 1.5rem; }
+  @media (min-width: 768px) { .villain-card.size-lg .villain-name { font-size: 1.875rem; } }
+  .villain-card.size-md .villain-name { font-size: 1.125rem; }
+  .villain-card.size-sm .villain-name { font-size: 0.875rem; }
+  .villain-tagline {
+    font-style: italic;
+    color: var(--stone-300);
+    margin-bottom: 0.75rem;
+    max-width: 20rem;
+  }
+  .villain-everyday {
+    color: var(--stone-400);
+    font-size: 0.875rem;
+    max-width: 20rem;
+    line-height: 1.5;
+  }
+
+  .vote-counter {
+    position: absolute;
+    top: -1rem;
+    right: -1rem;
+    width: 3.5rem;
+    height: 3.5rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 1.25rem;
+    border-width: 2px;
+    border-style: solid;
+  }
+
+  .undo-btn {
+    position: absolute;
+    bottom: -0.75rem;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0.25rem 0.75rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    background: var(--bg-deep);
+    cursor: pointer;
+    border-width: 1px;
+    border-style: solid;
+  }
+  .undo-btn:hover { opacity: 0.8; }
+
+  /* Matchup area */
+  .round-progress {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .round-dot {
+    width: 2rem;
+    height: 0.25rem;
+    border-radius: 9999px;
+    background: #333;
+  }
+  .round-dot.done { background: var(--gold); }
+  .round-dot.current { background: var(--red-bright); }
+
+  .matchup-question {
+    font-family: 'Cinzel', serif;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    text-align: center;
+    font-size: clamp(1.5rem, 4vw, 2.5rem);
+    margin-bottom: 0.5rem;
+    color: var(--cream);
+    text-shadow: 0 2px 12px rgba(201, 169, 97, 0.19);
+  }
+  .matchup-hint {
+    text-align: center;
+    font-style: italic;
+    color: var(--stone-400);
+    margin-bottom: 2.5rem;
+  }
+
+  .matchup-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2rem;
+    align-items: center;
+    margin-bottom: 2rem;
+  }
+  @media (min-width: 768px) {
+    .matchup-grid { grid-template-columns: 1fr auto 1fr; gap: 2rem; }
+  }
+  .vs-ornament {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem 0;
+  }
+  .vs-text {
+    position: relative;
+    font-family: 'Cinzel', serif;
+    font-weight: 900;
+    font-size: 3rem;
+    color: var(--red-bright);
+    text-shadow: 0 0 30px rgba(196, 30, 58, 0.5);
+  }
+  @media (min-width: 768px) { .vs-text { font-size: 3.75rem; } }
+
+  .matchup-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 3rem;
+  }
+  .vote-count-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--stone-500);
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+  }
+
+  /* Scoreboard */
+  .scoreboard { width: 100%; }
+  .scoreboard-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+  .scoreboard-header .line { height: 1px; flex: 1; background: var(--stone-700); }
+  .scoreboard-header .label {
+    font-family: 'Cinzel', serif;
+    text-transform: uppercase;
+    letter-spacing: 0.3em;
+    font-size: 0.75rem;
+    color: var(--stone-400);
+  }
+  .scoreboard-grid {
+    display: grid;
+    gap: 0.5rem;
+    grid-template-columns: 1fr;
+  }
+  @media (min-width: 768px) {
+    .scoreboard-grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+  }
+  .score-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .score-rank {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--stone-500);
+    width: 1rem;
+  }
+  .score-mid { flex: 1; }
+  .score-name {
+    font-family: 'Cinzel', serif;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.75rem;
+    color: var(--stone-300);
+  }
+  .score-bar {
+    height: 4px;
+    background: var(--stone-900);
+    border-radius: 9999px;
+    overflow: hidden;
+    margin-top: 0.25rem;
+  }
+  .score-bar-fill {
+    height: 100%;
+    border-radius: 9999px;
+    transition: width 0.7s ease;
+  }
+  .score-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 0.875rem;
+    width: 2rem;
+    text-align: right;
+  }
+
+  /* Round end */
+  .round-end-eyebrow {
+    font-family: 'Cinzel', serif;
+    text-transform: uppercase;
+    letter-spacing: 0.4em;
+    font-size: 0.875rem;
+    color: rgba(255, 236, 179, 0.6);
+    margin-bottom: 0.75rem;
+  }
+  .round-end-title {
+    font-family: 'Cinzel', serif;
+    font-weight: 900;
+    font-size: clamp(2rem, 6vw, 4rem);
+    margin-bottom: 2rem;
+    color: var(--gold);
+  }
+
+  /* Final screen */
+  .final-title {
+    font-family: 'Cinzel', serif;
+    text-transform: uppercase;
+    text-align: center;
+    font-size: clamp(1.75rem, 5vw, 3rem);
+    margin-bottom: 0.75rem;
+    color: var(--gold);
+    text-shadow: 0 2px 20px rgba(201, 169, 97, 0.25);
+  }
+  .final-subtitle {
+    text-align: center;
+    font-style: italic;
+    color: var(--stone-400);
+    margin-bottom: 2.5rem;
+    max-width: 32rem;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* Results */
+  .crown {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+    filter: drop-shadow(0 4px 20px rgba(201, 169, 97, 0.4));
+  }
+  .ultimate-name {
+    font-family: 'Cinzel', serif;
+    font-weight: 900;
+    text-transform: uppercase;
+    font-size: clamp(2.5rem, 7vw, 4.5rem);
+    margin-bottom: 0.5rem;
+  }
+  .ultimate-tagline {
+    font-style: italic;
+    color: var(--stone-300);
+    font-size: 1.25rem;
+    margin-bottom: 0.5rem;
+  }
+  .ultimate-label {
+    font-family: 'Cinzel', serif;
+    text-transform: uppercase;
+    letter-spacing: 0.3em;
+    font-size: 0.75rem;
+    color: var(--stone-500);
+    margin-bottom: 2.5rem;
+  }
+
+  .text-center { text-align: center; }
+  .max-w-lg { max-width: 32rem; margin-left: auto; margin-right: auto; }
+  .max-w-xl { max-width: 36rem; margin-left: auto; margin-right: auto; }
+  .max-w-4xl { max-width: 56rem; margin-left: auto; margin-right: auto; }
+  .mb-8 { margin-bottom: 2rem; }
+  .mb-10 { margin-bottom: 2.5rem; }
+</style>
+</head>
+<body>
+  <div id="app" class="app"></div>
+
+<script>
+// ─── VILLAIN DATA ─────────────────────────────────────────────────────────
+const VILLAINS = {
+  hannibal: {
+    name: "Hannibal Lecter",
+    tagline: "A census taker once tried to test me…",
+    everyday: "Critiques your lunch choices with unsettling specificity.",
+    bg: "#2a0a12", accent: "#c9a961", flesh: "#7a1c2d",
+  },
+  joker: {
+    name: "The Joker",
+    tagline: "Why so serious?",
+    everyday: "Orchestrates chaos via reply-all memes.",
+    bg: "#14082a", accent: "#8fbc3a", flesh: "#5a1884",
+  },
+  loki: {
+    name: "Loki",
+    tagline: "I am burdened with glorious purpose.",
+    everyday: "Takes credit for your work with a measured smirk.",
+    bg: "#0a1f14", accent: "#d4af37", flesh: "#1a4a2e",
+  },
+  vader: {
+    name: "Darth Vader",
+    tagline: "I find your lack of faith disturbing.",
+    everyday: "Heavy-breathes on every Zoom call. Camera always off.",
+    bg: "#0a0a0a", accent: "#c41e3a", flesh: "#1e1e1e",
+  },
+  smith: {
+    name: "Agent Smith",
+    tagline: "Never send a human to do a machine's job.",
+    everyday: "Master of the phrase 'per my last email.'",
+    bg: "#061206", accent: "#39ff14", flesh: "#0f2a0f",
+  },
+  thanos: {
+    name: "Thanos",
+    tagline: "Perfectly balanced, as all things should be.",
+    everyday: "Sincerely believes layoffs are necessary and inevitable.",
+    bg: "#160826", accent: "#d4af37", flesh: "#3d1f5c",
+  },
+  cersei: {
+    name: "Cersei Lannister",
+    tagline: "When you play the game of thrones…",
+    everyday: "Queen of passive-aggressive Slack messages.",
+    bg: "#210410", accent: "#d4af37", flesh: "#5c0e1a",
+  },
+};
+
+// ─── GAME STRUCTURE ───────────────────────────────────────────────────────
+const ROUNDS = [
+  {
+    title: "Round I", name: "Cold, Hard Logic",
+    subtitle: "Philosophy, power, and the fate of civilization.",
+    matchups: [
+      { q: "Whose philosophy sounds more logical?", a: "thanos", b: "smith" },
+      { q: "Who would destabilize society faster?", a: "joker", b: "loki" },
+    ],
+  },
+  {
+    title: "Round II", name: "Everyday Menace",
+    subtitle: "Ordinary life. Extraordinary awfulness.",
+    matchups: [
+      { q: "Who would be the worst Uber driver?", a: "vader", b: "joker" },
+      { q: "Who would be the worst dinner-party host?", a: "hannibal", b: "cersei" },
+      { q: "Worst seatmate on a 12-hour flight?", a: "smith", b: "vader" },
+    ],
+  },
+  {
+    title: "Round III", name: "Office Hellscape",
+    subtitle: "Villains in business casual.",
+    matchups: [
+      { q: "Who would survive Corporate America?", a: "cersei", b: "thanos" },
+      { q: "Who would you rather report to?", a: "hannibal", b: "thanos" },
+      { q: "Who would destroy the group project?", a: "loki", b: "joker" },
+      { q: "Who would survive a team-building retreat?", a: "hannibal", b: "thanos" },
+    ],
+  },
+  {
+    title: "Round IV", name: "Matters of the Heart",
+    subtitle: "Feelings. Apparently, even villains have them.",
+    matchups: [
+      { q: "Who would be most dramatic in a breakup?", a: "loki", b: "cersei" },
+      { q: "Who would secretly cry alone?", a: "vader", b: "cersei" },
+      { q: "Who would win a psychological battle?", a: "hannibal", b: "cersei" },
+    ],
+  },
+];
+
+// ─── STATE ────────────────────────────────────────────────────────────────
+function emptyScores() {
+  return Object.fromEntries(Object.keys(VILLAINS).map((k) => [k, 0]));
+}
+
+let state = {
+  phase: "intro",
+  roundIdx: 0,
+  matchupIdx: 0,
+  matchupVotes: {},
+  totalVotes: emptyScores(),
+  finalVotes: emptyScores(),
+};
+
+// ─── SVG ICONS ────────────────────────────────────────────────────────────
+function iconSvg(id, color, size) {
+  const s = size || 120;
+  const common = `width="${s}" height="${s}" viewBox="0 0 100 100" fill="${color}"`;
+  const maps = {
+    hannibal: `<svg ${common}>
+      <path d="M28 22 Q28 12 50 12 Q72 12 72 22 L72 65 Q72 82 50 88 Q28 82 28 65 Z"/>
+      ${[36,42,48,54,60,66].map(x=>`<rect x="${x-1}" y="30" width="1.5" height="48" fill="#000" opacity="0.55"/>`).join('')}
+      <rect x="30" y="44" width="40" height="1.2" fill="#000" opacity="0.5"/>
+      <rect x="30" y="58" width="40" height="1.2" fill="#000" opacity="0.5"/>
+    </svg>`,
+    joker: `<svg ${common}>
+      <path d="M28 14 L72 14 Q78 14 78 20 L78 80 Q78 86 72 86 L28 86 Q22 86 22 80 L22 20 Q22 14 28 14 Z"/>
+      <text x="30" y="34" font-family="Georgia, serif" font-size="18" font-weight="700" fill="#0a0a0a">J</text>
+      <text x="63" y="78" font-family="Georgia, serif" font-size="18" font-weight="700" fill="#0a0a0a" transform="rotate(180 70 72)">J</text>
+      <path d="M36 54 Q50 68 64 54" stroke="#0a0a0a" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <circle cx="41" cy="48" r="2" fill="#0a0a0a"/>
+      <circle cx="59" cy="48" r="2" fill="#0a0a0a"/>
+    </svg>`,
+    loki: `<svg ${common}>
+      <path d="M26 56 Q26 36 50 36 Q74 36 74 56 L74 78 L26 78 Z"/>
+      <path d="M30 38 Q18 18 22 10 Q30 20 40 36 Z"/>
+      <path d="M70 38 Q82 18 78 10 Q70 20 60 36 Z"/>
+      <circle cx="42" cy="56" r="2.5" fill="#0a0a0a"/>
+      <circle cx="58" cy="56" r="2.5" fill="#0a0a0a"/>
+    </svg>`,
+    vader: `<svg ${common}>
+      <path d="M30 28 Q30 14 50 14 Q70 14 70 28 L76 58 L70 78 L30 78 L24 58 Z"/>
+      <path d="M36 40 L46 48 L46 60 L34 56 Z" fill="#000" opacity="0.85"/>
+      <path d="M64 40 L54 48 L54 60 L66 56 Z" fill="#000" opacity="0.85"/>
+      <rect x="44" y="64" width="12" height="4" fill="#000" opacity="0.7"/>
+      <rect x="42" y="70" width="16" height="2" fill="#000" opacity="0.7"/>
+    </svg>`,
+    smith: `<svg ${common}>
+      <path d="M14 46 Q14 56 24 56 L40 56 Q46 56 46 50 L46 44 Q46 38 40 38 L24 38 Q14 38 14 46 Z"/>
+      <path d="M54 46 Q54 56 64 56 L80 56 Q86 56 86 50 L86 44 Q86 38 80 38 L64 38 Q54 38 54 46 Z"/>
+      <rect x="46" y="46" width="8" height="2.5"/>
+      <path d="M30 62 L70 62" stroke="${color}" stroke-width="2"/>
+      <path d="M32 68 L68 68" stroke="${color}" stroke-width="1.5" opacity="0.7"/>
+    </svg>`,
+    thanos: `<svg ${common}>
+      <path d="M34 26 L50 20 L66 26 L70 72 L60 82 L40 82 L30 72 Z"/>
+      <circle cx="44" cy="40" r="3" fill="#ffd700"/>
+      <circle cx="56" cy="40" r="3" fill="#c41e3a"/>
+      <circle cx="44" cy="52" r="3" fill="#39ff14"/>
+      <circle cx="56" cy="52" r="3" fill="#3a8fff"/>
+      <circle cx="50" cy="64" r="3" fill="#b84bff"/>
+      <circle cx="50" cy="30" r="2.5" fill="#ff6a1a"/>
+    </svg>`,
+    cersei: `<svg ${common}>
+      <path d="M20 52 L28 28 L38 44 L50 22 L62 44 L72 28 L80 52 L80 72 L20 72 Z"/>
+      <circle cx="28" cy="28" r="2.5" fill="#c41e3a"/>
+      <circle cx="50" cy="22" r="2.8" fill="#c41e3a"/>
+      <circle cx="72" cy="28" r="2.5" fill="#c41e3a"/>
+      <rect x="20" y="68" width="60" height="4" fill="#0a0a0a" opacity="0.3"/>
+    </svg>`,
+  };
+  return maps[id] || '';
+}
+
+// ─── CARD RENDER ──────────────────────────────────────────────────────────
+function villainCardHtml(id, options) {
+  const opts = options || {};
+  const v = VILLAINS[id];
+  const size = opts.size || "md";
+  const iconSize = size === "lg" ? 130 : size === "md" ? 80 : 60;
+  const clickable = opts.onVote ? ' clickable' : '';
+  const dim = opts.dim ? ' dim' : '';
+  const cardStyle = `
+    background: linear-gradient(160deg, ${v.flesh} 0%, ${v.bg} 100%);
+    border: 1px solid ${v.accent}60;
+    ${opts.onVote ? `box-shadow: 0 10px 40px -10px ${v.accent}40, inset 0 0 60px 0 rgba(0,0,0,0.5);` : ''}
+  `;
+  const clickAttr = opts.onVote ? `onclick="${opts.onVote}('${id}')"` : '';
+
+  const showDetails = size === "lg";
+  const voteCount = opts.voteCount || 0;
+
+  return `
+    <div class="villain-card size-${size}${clickable}${dim}" style="${cardStyle}" ${clickAttr}>
+      <div class="villain-corner tl" style="border-color: ${v.accent}"></div>
+      <div class="villain-corner tr" style="border-color: ${v.accent}"></div>
+      <div class="villain-corner bl" style="border-color: ${v.accent}"></div>
+      <div class="villain-corner br" style="border-color: ${v.accent}"></div>
+      <div class="villain-inner">
+        <div class="villain-icon-wrap" style="filter: drop-shadow(0 4px 12px ${v.accent}30);">
+          ${iconSvg(id, v.accent, iconSize)}
+        </div>
+        <div class="villain-name" style="color: ${v.accent}; text-shadow: 0 2px 8px ${v.accent}20;">${v.name}</div>
+        ${showDetails ? `
+          <div class="villain-tagline">"${v.tagline}"</div>
+          <div class="villain-everyday">${v.everyday}</div>
+        ` : ''}
+      </div>
+      ${opts.onVote ? `
+        <div class="vote-counter" style="background: ${v.bg}; border-color: ${v.accent}; color: ${v.accent}; box-shadow: 0 4px 20px ${v.accent}60;">
+          ${voteCount}
+        </div>
+      ` : ''}
+      ${opts.onUnvote && voteCount > 0 ? `
+        <button class="undo-btn" style="border-color: ${v.accent}80; color: ${v.accent};" onclick="event.stopPropagation(); ${opts.onUnvote}('${id}')">
+          − undo
+        </button>
+      ` : ''}
+    </div>
+  `;
+}
+
+// ─── SCOREBOARD RENDER ────────────────────────────────────────────────────
+function scoreboardHtml(scores, compact) {
+  const sorted = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+  const max = Math.max(1, ...Object.values(scores));
+  const rowsHtml = sorted.map(([id, score], i) => {
+    const v = VILLAINS[id];
+    const pct = (score / max) * 100;
+    return `
+      <div class="score-row">
+        <div class="score-rank">${i + 1}</div>
+        ${iconSvg(id, v.accent, 24)}
+        <div class="score-mid">
+          <div class="score-name">${v.name}</div>
+          <div class="score-bar">
+            <div class="score-bar-fill" style="width: ${pct}%; background: linear-gradient(90deg, ${v.flesh}, ${v.accent});"></div>
+          </div>
+        </div>
+        <div class="score-value" style="color: ${v.accent};">${score}</div>
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <div class="scoreboard">
+      <div class="scoreboard-header">
+        <div class="line"></div>
+        <div class="label">Running Tally</div>
+        <div class="line"></div>
+      </div>
+      <div class="scoreboard-grid ${compact ? '' : 'cols-2'}">
+        ${rowsHtml}
+      </div>
+    </div>
+  `;
+}
+
+// ─── SCREEN RENDERS ───────────────────────────────────────────────────────
+function renderIntro() {
+  const galleryHtml = Object.keys(VILLAINS)
+    .map((id) => villainCardHtml(id, { size: "md" }))
+    .join('');
+
+  return `
+    <div class="screen">
+      <div class="text-center max-w-4xl">
+        <div class="intro-eyebrow">A Team Social Parlor Game</div>
+        <h1 class="intro-title">THE VILLAINS</h1>
+        <div class="intro-subtitle">Among Us</div>
+        <p class="intro-blurb">
+          Seven icons of fictional evil have been dropped into ordinary life.
+          Who wins, who breaks, and who is — in the end — the most villainous of them all?
+        </p>
+        <div class="villain-gallery">${galleryHtml}</div>
+        <div class="rules-box">
+          <div class="rules-title">How it Plays — 30 minutes</div>
+          <div class="rules-list">
+            <div class="rules-item"><span class="rules-num">I</span><span>Cold, Hard Logic — whose worldview holds up?</span></div>
+            <div class="rules-item"><span class="rules-num">II</span><span>Everyday Menace — ordinary life, extraordinary awfulness</span></div>
+            <div class="rules-item"><span class="rules-num">III</span><span>Office Hellscape — villains in business casual</span></div>
+            <div class="rules-item"><span class="rules-num">IV</span><span>Matters of the Heart — feelings, apparently</span></div>
+            <div class="rules-item"><span class="rules-num">★</span><span>Final Verdict — crown the Ultimate Villain (3× weight)</span></div>
+          </div>
+          <div class="rules-footer">
+            Tap a villain card to cast a vote. Use a show of hands or open debate — the host records the result.
+          </div>
+        </div>
+        <button class="btn" onclick="startGame()">Begin the Games</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderRound() {
+  const round = ROUNDS[state.roundIdx];
+  const matchup = round.matchups[state.matchupIdx];
+  const matchupTotal = Object.values(state.matchupVotes).reduce((a, b) => a + b, 0);
+  const dotsHtml = round.matchups.map((_, i) => {
+    const cls = i < state.matchupIdx ? 'done' : i === state.matchupIdx ? 'current' : '';
+    return `<div class="round-dot ${cls}"></div>`;
+  }).join('');
+
+  return `
+    <div class="screen stage">
+      <div class="stage-frame">
+        <div class="stage-label"><span>${round.title} — ${round.name}</span></div>
+        <div class="round-progress">${dotsHtml}</div>
+        <h2 class="matchup-question">${matchup.q}</h2>
+        <div class="matchup-hint">Tap a villain to vote. The crowd decides.</div>
+        <div class="matchup-grid">
+          ${villainCardHtml(matchup.a, { size: "lg", voteCount: state.matchupVotes[matchup.a] || 0, onVote: 'addVote', onUnvote: 'subVote' })}
+          <div class="vs-ornament"><div class="vs-text">VS</div></div>
+          ${villainCardHtml(matchup.b, { size: "lg", voteCount: state.matchupVotes[matchup.b] || 0, onVote: 'addVote', onUnvote: 'subVote' })}
+        </div>
+        <div class="matchup-controls">
+          <div class="vote-count-label">Votes cast: ${matchupTotal}</div>
+          <button class="btn-gold btn" ${matchupTotal === 0 ? 'disabled' : ''} onclick="lockIn()">Lock in Result →</button>
+        </div>
+        ${scoreboardHtml(state.totalVotes)}
+      </div>
+    </div>
+  `;
+}
+
+function renderRoundEnd() {
+  const round = ROUNDS[state.roundIdx];
+  const isLast = state.roundIdx + 1 >= ROUNDS.length;
+  return `
+    <div class="screen">
+      <div class="text-center max-w-4xl" style="width: 100%;">
+        <div class="round-end-eyebrow">${round.title} Complete</div>
+        <h2 class="round-end-title">${round.name}</h2>
+        <div class="max-w-xl mb-10">${scoreboardHtml(state.totalVotes)}</div>
+        <button class="btn" onclick="nextRound()">
+          ${isLast ? 'Proceed to Final Verdict →' : 'Begin Next Round →'}
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function renderFinal() {
+  const total = Object.values(state.finalVotes).reduce((a, b) => a + b, 0);
+  const cardsHtml = Object.keys(VILLAINS).map((id) => villainCardHtml(id, {
+    size: "md",
+    voteCount: state.finalVotes[id] || 0,
+    onVote: 'addFinalVote',
+    onUnvote: 'subFinalVote',
+  })).join('');
+
+  return `
+    <div class="screen stage">
+      <div class="stage-frame">
+        <div class="stage-label"><span>The Final Verdict</span></div>
+        <h2 class="final-title">Who is the Ultimate Villain?</h2>
+        <p class="final-subtitle">
+          One final vote. Tap the villain who, after all of it, reigns supreme.
+          Final votes count triple.
+        </p>
+        <div class="villain-gallery" style="margin-bottom: 2.5rem;">${cardsHtml}</div>
+        <div class="matchup-controls">
+          <div class="vote-count-label">Final votes cast: ${total}</div>
+          <button class="btn btn-final" ${total === 0 ? 'disabled' : ''} onclick="crown()">Crown the Villain →</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderResults() {
+  const sortedFinal = Object.entries(state.finalVotes).sort((a, b) => b[1] - a[1]);
+  const ultimate = sortedFinal[0];
+  const v = VILLAINS[ultimate[0]];
+
+  // Combined score: totals + 3x final
+  const combined = { ...state.totalVotes };
+  Object.entries(state.finalVotes).forEach(([id, vote]) => {
+    combined[id] = (combined[id] || 0) + vote * 3;
+  });
+
+  return `
+    <div class="screen">
+      <div class="text-center max-w-4xl" style="width: 100%;">
+        <div class="round-end-eyebrow">Hereby crowned</div>
+        <div class="crown">♛</div>
+        <h2 class="ultimate-name" style="color: ${v.accent}; text-shadow: 0 4px 30px ${v.accent}60;">${v.name}</h2>
+        <div class="ultimate-tagline">"${v.tagline}"</div>
+        <div class="ultimate-label">The Ultimate Villain</div>
+        <div class="max-w-lg mb-8">${villainCardHtml(ultimate[0], { size: "lg" })}</div>
+        <div class="max-w-xl mb-10">
+          <div style="font-family: 'Cinzel', serif; text-transform: uppercase; letter-spacing: 0.3em; font-size: 0.75rem; color: rgba(255, 236, 179, 0.6); margin-bottom: 1rem;">
+            Final Leaderboard (rounds + 3× final vote)
+          </div>
+          ${scoreboardHtml(combined)}
+        </div>
+        <button class="btn btn-ghost" onclick="resetGame()">↺ Play Again</button>
+      </div>
+    </div>
+  `;
+}
+
+// ─── MAIN RENDER ──────────────────────────────────────────────────────────
+function render() {
+  const app = document.getElementById('app');
+  let html = '';
+  switch (state.phase) {
+    case 'intro': html = renderIntro(); break;
+    case 'round': html = renderRound(); break;
+    case 'roundEnd': html = renderRoundEnd(); break;
+    case 'final': html = renderFinal(); break;
+    case 'results': html = renderResults(); break;
+  }
+  // Reset button visible except on intro and results
+  if (state.phase !== 'intro' && state.phase !== 'results') {
+    html += `<button class="reset-btn" onclick="resetGame()">reset</button>`;
+  }
+  app.innerHTML = html;
+  window.scrollTo(0, 0);
+}
+
+// ─── ACTIONS ──────────────────────────────────────────────────────────────
+function startGame() {
+  state.phase = 'round';
+  render();
+}
+
+function addVote(id) {
+  state.matchupVotes[id] = (state.matchupVotes[id] || 0) + 1;
+  render();
+}
+function subVote(id) {
+  state.matchupVotes[id] = Math.max(0, (state.matchupVotes[id] || 0) - 1);
+  render();
+}
+
+function lockIn() {
+  Object.entries(state.matchupVotes).forEach(([id, v]) => {
+    state.totalVotes[id] = (state.totalVotes[id] || 0) + v;
+  });
+  state.matchupVotes = {};
+  const round = ROUNDS[state.roundIdx];
+  if (state.matchupIdx + 1 < round.matchups.length) {
+    state.matchupIdx++;
+  } else {
+    state.phase = 'roundEnd';
+  }
+  render();
+}
+
+function nextRound() {
+  if (state.roundIdx + 1 < ROUNDS.length) {
+    state.roundIdx++;
+    state.matchupIdx = 0;
+    state.phase = 'round';
+  } else {
+    state.phase = 'final';
+  }
+  render();
+}
+
+function addFinalVote(id) {
+  state.finalVotes[id] = (state.finalVotes[id] || 0) + 1;
+  render();
+}
+function subFinalVote(id) {
+  state.finalVotes[id] = Math.max(0, (state.finalVotes[id] || 0) - 1);
+  render();
+}
+
+function crown() {
+  state.phase = 'results';
+  render();
+}
+
+function resetGame() {
+  state = {
+    phase: 'intro',
+    roundIdx: 0,
+    matchupIdx: 0,
+    matchupVotes: {},
+    totalVotes: emptyScores(),
+    finalVotes: emptyScores(),
+  };
+  render();
+}
+
+// Kick off
+render();
+</script>
+</body>
+</html>
