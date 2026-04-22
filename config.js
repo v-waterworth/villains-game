@@ -4,10 +4,10 @@
 // ═══════════════════════════════════════════════════════════════════════
 
 // Your storage account name (e.g. "vgvillainsvw") — no URL, no dots:
-export const STORAGE_ACCOUNT = "YOUR_STORAGE_ACCOUNT";
+export const STORAGE_ACCOUNT = "vgvillainsvw";
 
 // SAS token string — the part AFTER the "?" (starts with "sv=...")
-export const SAS_TOKEN = "YOUR_SAS_TOKEN";
+export const SAS_TOKEN = "sv=2025-11-05&ss=bfqt&srt=sco&sp=rwdlacupiytfx&se=2026-04-22T08:12:21Z&st=2026-04-21T23:57:21Z&spr=https&sig=SZHFCINt%2FurAzHt6ENMlNQYLPZuq57tjXbuxd6cOWu0%3D";
 
 // Leave these alone unless you know why you're changing them.
 export const TABLE_NAME = "villains";
