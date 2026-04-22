@@ -14,48 +14,39 @@
 <div id="status" class="status-pill"><div class="status-dot"></div><span>Connecting</span></div>
 
 <script type="module">
-import { SESSION_ID, POLL_INTERVAL_HOST } from './config.js';
+import { SESSION_ID, POLL_INTERVAL_HOST, STORAGE_ACCOUNT, SAS_TOKEN } from './config.js';
 import { VILLAINS, ROUNDS, matchupKey, villainCardHtml, scoreboardHtml, computeTotals, countVotes } from './game-core.js';
+import { list, upsert, remove, groupRows } from './storage.js';
 
-// ─── Local state (mirrors API responses) ──────────────────────────────────
+if (STORAGE_ACCOUNT === "YOUR_STORAGE_ACCOUNT" || SAS_TOKEN === "YOUR_SAS_TOKEN") {
+  document.getElementById('app').innerHTML = `
+    <div class="screen">
+      <div class="setup-error">
+        <h3>⚠ Not Configured</h3>
+        <p>Edit <code>config.js</code> — set <code>STORAGE_ACCOUNT</code> and <code>SAS_TOKEN</code>.</p>
+        <p>See the README for the 2-minute Portal walkthrough.</p>
+      </div>
+    </div>`;
+  document.getElementById('status').style.display = 'none';
+  throw new Error("Not configured");
+}
+
 let gameState = { phase: 'intro', roundIdx: 0, matchupIdx: 0 };
 let allVotes = {};
 let finalVotes = {};
 let voters = {};
 
-// ─── Voter URL (for QR + share) ───────────────────────────────────────────
 const voterUrl = window.location.origin +
-  window.location.pathname.replace(/host\.html$/, '') +
-  (SESSION_ID !== 'team-social' ? `?s=${SESSION_ID}` : '');
+  window.location.pathname.replace(/host\.html$/, '');
 
-// ─── API helpers ──────────────────────────────────────────────────────────
-async function fetchSession() {
-  const res = await fetch(`/api/session?s=${encodeURIComponent(SESSION_ID)}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-}
-
-async function sendAction(body) {
-  const res = await fetch('/api/action', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...body, s: SESSION_ID }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `HTTP ${res.status}`);
-  }
-  return res.json();
-}
-
-// ─── Poll loop ────────────────────────────────────────────────────────────
 async function poll() {
   try {
-    const data = await fetchSession();
-    gameState = data.state || { phase: 'intro', roundIdx: 0, matchupIdx: 0 };
-    allVotes = data.votes || {};
-    finalVotes = data.final || {};
-    voters = data.voters || {};
+    const rows = await list();
+    const g = groupRows(rows);
+    gameState = g.state;
+    allVotes = g.votes;
+    finalVotes = g.final;
+    voters = g.voters;
     setStatus('connected');
     render();
   } catch (err) {
@@ -64,15 +55,14 @@ async function poll() {
   }
 }
 
-// ─── Host actions ─────────────────────────────────────────────────────────
 async function setState(newState) {
-  gameState = newState; // optimistic
+  gameState = newState;
   render();
   try {
-    await sendAction({ action: 'setState', state: newState });
+    await upsert('state', newState);
   } catch (err) {
     console.error(err);
-    alert('Action failed. Check your connection.');
+    alert('Action failed: ' + err.message);
   }
 }
 
@@ -100,14 +90,19 @@ window.crownWinner = () => setState({ ...gameState, phase: 'results' });
 window.resetGame = async () => {
   if (!confirm('Reset everything? All votes will be cleared.')) return;
   try {
-    await sendAction({ action: 'reset' });
+    const rows = await list();
+    for (const row of rows) {
+      if (row.RowKey === 'state' || row.RowKey.startsWith('vote:') || row.RowKey.startsWith('final:')) {
+        await remove(row.RowKey);
+      }
+    }
     gameState = { phase: 'intro', roundIdx: 0, matchupIdx: 0 };
     allVotes = {};
     finalVotes = {};
     render();
   } catch (err) {
     console.error(err);
-    alert('Reset failed.');
+    alert('Reset failed: ' + err.message);
   }
 };
 
@@ -125,7 +120,6 @@ window.copyVoterUrl = async () => {
   }
 };
 
-// ─── Status indicator ─────────────────────────────────────────────────────
 function setStatus(state) {
   const pill = document.getElementById('status');
   pill.className = 'status-pill ' + state;
@@ -133,7 +127,6 @@ function setStatus(state) {
     state === 'connected' ? 'Live' : state === 'error' ? 'Error' : 'Connecting';
 }
 
-// ─── Render ───────────────────────────────────────────────────────────────
 function render() {
   const app = document.getElementById('app');
   let html = '';
@@ -166,7 +159,6 @@ function renderIntro() {
           Seven icons of fictional evil dropped into ordinary life.
           Share the URL below with your team so they can vote from their phones.
         </p>
-
         <div class="share-panel">
           <div class="share-qr"><img src="${qrUrl}" alt="Scan to join" width="200" height="200"/></div>
           <div class="share-info">
@@ -179,9 +171,7 @@ function renderIntro() {
             </div>
           </div>
         </div>
-
         <div class="villain-gallery">${galleryHtml}</div>
-
         <div class="rules-box">
           <div class="rules-title">How it Plays — 30 minutes</div>
           <div class="rules-list">
@@ -195,7 +185,6 @@ function renderIntro() {
             Votes update live. Click "Lock In Result" to advance through the matchups.
           </div>
         </div>
-
         <button class="btn" onclick="startGame()">Begin the Games</button>
       </div>
     </div>`;
@@ -225,13 +214,11 @@ function renderMatchup() {
         <div class="round-progress">${dotsHtml}</div>
         <h2 class="matchup-question">${matchup.q}</h2>
         <div class="matchup-hint">Live — votes update as the team decides.</div>
-
         <div class="matchup-grid">
           ${villainCardHtml(matchup.a, { size: 'lg', voteCount: matchupCounts[matchup.a] || 0 })}
           <div class="vs-ornament"><div class="vs-text">VS</div></div>
           ${villainCardHtml(matchup.b, { size: 'lg', voteCount: matchupCounts[matchup.b] || 0 })}
         </div>
-
         <div class="matchup-controls">
           <div class="vote-count-label">
             ${matchupTotal} of ${voterCount} ${voterCount === 1 ? 'voter' : 'voters'} cast
@@ -240,7 +227,6 @@ function renderMatchup() {
             ${gameState.matchupIdx + 1 < round.matchups.length ? 'Lock In → Next Matchup' : 'Lock In → End Round'}
           </button>
         </div>
-
         ${scoreboardHtml(runningTotals)}
       </div>
     </div>`;
@@ -324,7 +310,6 @@ function renderResults() {
     </div>`;
 }
 
-// ─── Kick off ─────────────────────────────────────────────────────────────
 poll();
 setInterval(poll, POLL_INTERVAL_HOST);
 </script>

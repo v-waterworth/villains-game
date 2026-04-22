@@ -14,17 +14,31 @@
 <div id="status" class="status-pill"><div class="status-dot"></div><span>Connecting</span></div>
 
 <script type="module">
-import { SESSION_ID, POLL_INTERVAL_VOTER } from './config.js';
+import { SESSION_ID, POLL_INTERVAL_VOTER, STORAGE_ACCOUNT, SAS_TOKEN } from './config.js';
 import { VILLAINS, ROUNDS, matchupKey, villainCardHtml } from './game-core.js';
+import { list, upsert, groupRows } from './storage.js';
 
-// ─── Voter ID (persistent per device) ─────────────────────────────────────
+// Check config
+if (STORAGE_ACCOUNT === "YOUR_STORAGE_ACCOUNT" || SAS_TOKEN === "YOUR_SAS_TOKEN") {
+  document.getElementById('app').innerHTML = `
+    <div class="screen">
+      <div class="setup-error">
+        <h3>⚠ Not Configured</h3>
+        <p>Edit <code>config.js</code> — set <code>STORAGE_ACCOUNT</code> and <code>SAS_TOKEN</code>.</p>
+        <p>See the README for the 2-minute Portal walkthrough.</p>
+      </div>
+    </div>`;
+  document.getElementById('status').style.display = 'none';
+  throw new Error("Not configured");
+}
+
+// Voter ID persists per device
 let voterId = localStorage.getItem('villainsVoterId');
 if (!voterId) {
-  voterId = 'v_' + Math.random().toString(36).substr(2, 10);
+  voterId = 'v' + Math.random().toString(36).substr(2, 10);
   localStorage.setItem('villainsVoterId', voterId);
 }
 
-// ─── Local state ──────────────────────────────────────────────────────────
 let gameState = { phase: 'intro', roundIdx: 0, matchupIdx: 0 };
 let lastStateSig = '';
 let registered = false;
@@ -33,41 +47,18 @@ function getMyVote(key) {
   return localStorage.getItem(`villainsVote_${SESSION_ID}_${key}`) || null;
 }
 
-// ─── API helpers ──────────────────────────────────────────────────────────
-async function fetchSession() {
-  const res = await fetch(`/api/session?s=${encodeURIComponent(SESSION_ID)}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-}
-
-async function sendAction(body) {
-  const res = await fetch('/api/action', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...body, s: SESSION_ID }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `HTTP ${res.status}`);
-  }
-  return res.json();
-}
-
-// ─── Poll loop ────────────────────────────────────────────────────────────
 async function poll() {
   try {
-    // Register on first successful connect
     if (!registered) {
       try {
-        await sendAction({ action: 'register', voterId });
+        await upsert(`voter:${voterId}`, String(Date.now()));
         registered = true;
       } catch (_) { /* retry next poll */ }
     }
-
-    const data = await fetchSession();
-    gameState = data.state || { phase: 'intro', roundIdx: 0, matchupIdx: 0 };
+    const rows = await list();
+    const grouped = groupRows(rows);
+    gameState = grouped.state;
     setStatus('connected');
-
     const sig = JSON.stringify(gameState);
     if (sig !== lastStateSig) {
       lastStateSig = sig;
@@ -79,17 +70,16 @@ async function poll() {
   }
 }
 
-// ─── Vote handlers ────────────────────────────────────────────────────────
 window.castVote = async function (villainId) {
   if (gameState.phase !== 'round') return;
   const key = matchupKey(gameState.roundIdx, gameState.matchupIdx);
   localStorage.setItem(`villainsVote_${SESSION_ID}_${key}`, villainId);
-  render(); // optimistic
+  render();
   try {
-    await sendAction({ action: 'vote', matchupKey: key, voterId, villainId });
+    await upsert(`vote:${key}:${voterId}`, villainId);
   } catch (err) {
     console.error(err);
-    alert('Vote failed. Check your connection and try again.');
+    alert('Vote failed: ' + err.message);
   }
 };
 
@@ -98,14 +88,13 @@ window.castFinalVote = async function (villainId) {
   localStorage.setItem(`villainsVote_${SESSION_ID}_final`, villainId);
   render();
   try {
-    await sendAction({ action: 'finalVote', voterId, villainId });
+    await upsert(`final:${voterId}`, villainId);
   } catch (err) {
     console.error(err);
-    alert('Vote failed. Check your connection and try again.');
+    alert('Vote failed: ' + err.message);
   }
 };
 
-// ─── Status indicator ─────────────────────────────────────────────────────
 function setStatus(state) {
   const pill = document.getElementById('status');
   pill.className = 'status-pill ' + state;
@@ -113,7 +102,6 @@ function setStatus(state) {
     state === 'connected' ? 'Live' : state === 'error' ? 'Error' : 'Connecting';
 }
 
-// ─── Render ───────────────────────────────────────────────────────────────
 function render() {
   const app = document.getElementById('app');
   let html = '';
@@ -228,7 +216,7 @@ function renderResults() {
     </div>`;
 }
 
-// ─── Kick off ─────────────────────────────────────────────────────────────
+// Kick off
 poll();
 setInterval(poll, POLL_INTERVAL_VOTER);
 </script>

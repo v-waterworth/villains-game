@@ -1,170 +1,120 @@
-# The Villains Among Us — Azure-Native Edition
+# The Villains Among Us
 
-A real-time voting game for team socials. Runs entirely on Azure: Static Web Apps hosts the front-end and automatically deploys the API as Azure Functions; Table Storage holds the votes.
-
-No Firebase, no third-party services for data sync. One Storage Account and one app-setting value is all you add on top of your existing Static Web App.
-
----
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Azure Static Web App (Free tier)                           │
-│                                                             │
-│  ┌─────────────┐         ┌──────────────────────────────┐   │
-│  │ Static HTML │         │ Managed Azure Functions      │   │
-│  │ index.html  │────────▶│ GET  /api/session            │   │
-│  │ host.html   │         │ POST /api/action             │   │
-│  └─────────────┘         └──────────────────────────────┘   │
-│         │ polls every 1-2s          │                        │
-└─────────┼──────────────────────────┼───────────────────────┘
-          │                          │
-          │                          ▼
-          │          ┌─────────────────────────────────┐
-          │          │ Azure Storage Account           │
-          │          │ └─ Table: villains              │
-          │          │    └─ PartitionKey: sessionId   │
-          └─────────▶│       RowKeys:                  │
-                     │       • state                   │
-                     │       • vote:r0m0:voterId       │
-                     │       • final:voterId           │
-                     │       • voter:voterId           │
-                     └─────────────────────────────────┘
-```
-
-- **Hosting**: Your existing Static Web App (GitHub auto-deploys on commit)
-- **API**: `/api` folder deploys as Azure Functions automatically (no separate resource)
-- **State**: Azure Table Storage (one table, one partition per game session)
-- **Sync**: Client polls `/api/session` every 1–2 seconds
-
----
+A real-time team-social voting game. Hosted on Azure Static Web Apps.
+Uses Azure Table Storage directly from the browser — **no Functions, no API, no backend code**.
 
 ## Files
 
-| File | Purpose |
-|---|---|
-| `index.html` | Voter page — URL you share with the team |
-| `host.html` | Host console — displayed on the meeting screen |
-| `config.js` | Session ID + polling intervals |
-| `game-core.js` | Villains, questions, icons, helpers (edit to customize) |
-| `game.css` | Styling |
-| `staticwebapp.config.json` | SWA routing + cache headers |
-| `api/host.json` | Functions runtime config |
-| `api/package.json` | API dependencies (`@azure/data-tables`) |
-| `api/session/` | GET endpoint — returns current game state |
-| `api/action/` | POST endpoint — handles all writes |
+- `index.html` — voter page (shared with team)
+- `host.html` — host console (display on meeting screen)
+- `config.js` — the ONE file you edit
+- `storage.js` — talks to Table Storage
+- `game-core.js` — villains, questions, icons
+- `game.css` — styling
+
+That's it. Six files. No `api/` folder. No `package.json`. No Node version drama.
 
 ---
 
-## Setup (about 5 minutes in the Portal)
+## Setup (honestly 5 minutes)
 
-### 1. Create a Storage Account
+### 1. Generate a SAS token for your storage account
 
-1. Azure Portal → **Create a resource** → **Storage account** → **Create**
-2. Same subscription + resource group as your Static Web App (`rg-vg`)
-3. Name: anything globally unique (e.g., `vgvillains<yourinitials>`)
-4. Region: same as your SWA (`Central US` based on your earlier screenshot)
-5. Performance: **Standard**. Redundancy: **LRS** (cheapest; fine for this).
-6. Leave everything else at defaults → **Review + Create** → **Create**
+1. Azure Portal → your storage account (e.g. `vgvillainsvw`)
+2. Left sidebar → **Security + networking** → **Shared access signature**
+3. Configure like this:
+   - **Allowed services:** ☑ Table (uncheck the others)
+   - **Allowed resource types:** ☑ Service ☑ Container ☑ Object (check all three)
+   - **Allowed permissions:** ☑ Read ☑ Write ☑ Delete ☑ List ☑ Add ☑ Create ☑ Update
+   - **Start:** now
+   - **Expiry:** pick a date after your team social (a week out is plenty)
+   - **Allowed protocols:** HTTPS only
+   - Leave other fields default
+4. Click **Generate SAS and connection string** at the bottom
+5. **Copy the "SAS token" value** (NOT the full URL). It looks like: `sv=2022-11-02&ss=t&srt=sco&sp=rwdlacu&se=...&sig=...`
+   - If it starts with `?`, strip that leading `?`.
 
-This should cost less than $0.10/month at the volume a team social uses.
+### 2. Enable CORS on the storage account
 
-### 2. Copy the connection string
+The browser needs to be allowed to call Table Storage directly.
 
-1. Open the storage account → **Security + networking** → **Access keys**
-2. Click **Show** next to `key1` → copy the **Connection string**
+1. Same storage account → **Resource sharing (CORS)** in left sidebar
+2. Click the **Table service** tab
+3. Add a row:
+   - **Allowed origins:** `*` (or specifically your SWA URL like `https://yellow-pond-0a3ae0210.7.azurestaticapps.net`)
+   - **Allowed methods:** ☑ GET ☑ POST ☑ PUT ☑ DELETE ☑ OPTIONS ☑ MERGE
+   - **Allowed headers:** `*`
+   - **Exposed headers:** `*`
+   - **Max age:** `3600`
+4. Click **Save** at the top
 
-### 3. Add the connection string to your Static Web App
+### 3. Paste into `config.js`
 
-1. Open your Static Web App resource (`villains-game`)
-2. Left sidebar → **Configuration** → **Application settings** tab
-3. Click **+ Add**:
-   - **Name**: `AzureWebJobsStorage`
-   - **Value**: paste the connection string
-4. Click **OK** → **Save** at the top
+Open `config.js` in the repo and set:
 
-This tells the managed Azure Functions runtime where to talk to Table Storage. The table itself (`villains`) gets created automatically on first use — you don't need to pre-create it.
+```js
+export const STORAGE_ACCOUNT = "vgvillainsvw";  // your actual account name
+export const SAS_TOKEN = "sv=2022-11-02&ss=t&srt=sco&..."; // the SAS string
+```
 
-### 4. Push the code
+Commit and push.
 
-Drop all files from this repo into the root of `v-waterworth/villains-game`, commit, push. The GitHub Action Azure set up for you will:
-- Deploy static files to the CDN
-- Install `@azure/data-tables` and deploy the Functions under `/api`
+### 4. Clean up the old files
 
-First deploy takes ~2–3 minutes (npm install on the Functions side). Subsequent deploys are faster.
+In your GitHub repo, delete these (they're leftovers from the Functions attempt):
+- `api/` folder (and everything in it)
+- `staticwebapp.config.json` (not needed anymore)
+- Old `README.md` (replace with this one)
 
-### 5. Your URLs
+Also remove the `STORAGE_CONNECTION` env var from your Static Web App (Portal → Environment variables → delete the row). Not required anymore.
 
-- **Voter page (share this):** `https://<your-site>.azurestaticapps.net/`
-- **Host console:** `https://<your-site>.azurestaticapps.net/host.html`
+### 5. Done
 
----
+Static Web App auto-deploys on push.
 
-## Running the game
+- Voter URL: `https://<your-swa>.azurestaticapps.net/`
+- Host URL: `https://<your-swa>.azurestaticapps.net/host.html`
 
-1. Open `host.html` on the presenting screen. A QR code + voter URL appears.
-2. Team scans the QR (or types the URL on their phones). Voter count ticks up as they connect.
+## How to run the game
+
+1. Display `host.html` on the shared screen. QR code appears.
+2. Team scans QR (or types the voter URL). Voter count ticks up.
 3. Click **Begin the Games**.
-4. For each matchup, team members tap a villain. Counts update on your screen within ~1 second.
+4. Each matchup: team members tap a villain on their phones. Counts update on your screen within ~1 second.
 5. Click **Lock In → Next Matchup** when ready.
-6. At the end, the **Final Verdict** lets everyone pick from all 7 villains.
-7. Click **Crown the Villain** to reveal the winner.
+6. Final round: all 7 villains, one vote each.
+7. Click **Crown the Villain**.
 
-The **⟲ reset game** link (top-right) wipes all votes and returns to the intro. Voters stay connected — their pages auto-refresh to the new state.
+The ⟲ reset button clears votes without disconnecting voters.
 
----
+## Why this works when the Functions version didn't
 
-## Customizing
+The Functions version had too many moving parts:
+- Extension bundle version compat
+- Node runtime version
+- Environment variable name restrictions
+- Deploy race conditions
+- Package.json engine pinning
 
-- **Villains, questions, rounds:** edit `game-core.js` — the `VILLAINS` object and `ROUNDS` array at the top
-- **Theme colors:** edit `game.css` — CSS variables at the top (`--gold`, `--blood`, `--red-bright`)
-- **Fresh game each meeting:** change `SESSION_ID` in `config.js` — each unique value is an isolated slice of data in the table
-
----
-
-## Cost estimate
-
-For a 30-minute team social with 30 voters:
-- **Storage Account (Table):** ~500 entities × ~100 bytes = trivial. Well under $0.01.
-- **Static Web Apps (Free tier):** free.
-- **Managed Azure Functions (Free tier on SWA):** ~30,000 requests during the game; free tier includes 500,000/month.
-
-After the meeting, if you want to clean up: delete the Storage Account. The game stops working, but there's no recurring cost.
-
----
+This version has ONE failure point: the SAS token. If it's wrong, you see an error in the browser's DevTools Network tab immediately. No hidden server logs, no mysterious empty 500s.
 
 ## Troubleshooting
 
-**"AzureWebJobsStorage not configured" in the Functions logs:** The app setting isn't in your SWA. Re-check step 3.
+**"Not Configured" screen:** `config.js` still has placeholder values. Edit and push.
 
-**Connection string looks right but the API returns 500:** Make sure the storage account is in the same subscription as the Static Web App and has public network access enabled (Storage Account → Networking → Public network access: "Enabled from all networks" for this use case).
+**"Error" status pill with red dot:** Open DevTools → Network tab. Click the failing request. Response tab shows exact error. Usually it's:
+- CORS not enabled (go back to step 2)
+- SAS token missing a permission (regenerate with all the checkboxes above)
+- SAS expired (regenerate with a later expiry date)
+- Typo in `STORAGE_ACCOUNT` name
 
-**First request after a quiet period takes several seconds:** Normal cold-start on the Free Functions runtime. Subsequent requests are fast.
-
-**Voter count never goes up:** The POST `register` action is failing. Open DevTools in the voter browser, look at the Network tab for `/api/action` — the response body will say what's wrong.
-
-**Game state seems stuck:** Click **⟲ reset game** in the top-right of the host page.
-
-**QR code doesn't render:** It's fetched from `api.qrserver.com`. If your corp network blocks it, the voter URL text still works — they can type it or you can click to copy.
-
----
+**No voters connecting:** Same as above — errors on the voter page will show in their DevTools.
 
 ## Security notes
 
-The API endpoints have `authLevel: anonymous` — anyone with your Static Web App URL can read the state and submit votes. For a one-off team social on an obscure URL, this is fine. If you want tighter control:
+The SAS token you paste into `config.js` is visible in your repo. For a one-off team social, that's fine — the SAS expires, the storage account has nothing sensitive, and the URL is obscure. If you want tighter control, set the SAS expiry for just the day of the meeting.
 
-- Use SWA's built-in auth (`staticwebapp.config.json` can require auth on `/api/*`), then restrict to users in your AAD tenant
-- Or add a simple shared-secret header check in the Functions
-
-For a 30-minute meeting, the open endpoints are typically fine.
-
----
-
-## What if I want to clean up after the meeting?
-
-Three options:
-
-1. **Keep everything as-is.** Zero cost when idle.
-2. **Delete just the storage account.** Static Web App stays (it's free), the game stops working but returns instantly if you recreate the storage.
-3. **Delete the resource group.** Removes everything including the Static Web App.
+After the meeting, you can either:
+- Regenerate the SAS (old one stops working)
+- Delete the storage account (zero cost)
+- Delete the whole resource group
